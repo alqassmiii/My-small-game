@@ -11,17 +11,33 @@ const PLAYER_MAX_SPEED = 600;
 const LASER_MAX_SPEED = 300;    
 const LASER_COOLDOWN = 0.1;
 
+const ENEMIES_PER_ROW = 10;
+const ENEMY_HORIZONTAL_PADDING = 80;
+const ENEMY_VERTICAL_PADDING = 70;
+const ENEMY_VERTICAL_SPACING = 80;
+
+
+ 
+function rectIntersect(r1, r2) {
+    return !(
+        r2.left > r1.right ||
+        r2.right < r1.left ||
+        r2.top > r1.bottom ||
+        r2.bottom < r1.top
+    );
+}
+
 const GAME_STATE = {
     lastTime: Date.now(),
     leftPressed: false,
     rightPressed: false,
-    spacePrerssed: false,
-    playerX: 0,
-    playerY: 0,
-    PlayerCooldown: 0,
+    spacePressed: false,
+    playerX: GAME_WIDTH / 2, 
+    playerY: GAME_HEIGHT - 50, 
+    playerCooldown: 0,
     lasers: [],
+    enemies: []
 };
-
 
 function setPosition($element, x, y) {
     $element.style.transform = `translate(${x}px, ${y}px)`;
@@ -32,27 +48,29 @@ function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
 
-function createPlayer($game) {
-GAME_STATE.playerX = GAME_WIDTH / 2;
-GAME_STATE.playerY = GAME_HEIGHT - 50;
-const $player = document.createElement('img');
-$player.src = 'img/player-blue-1.png';
-$player.className = 'player';
-$game.appendChild($player);
-setPosition($player, GAME_STATE.playerX, GAME_STATE.playerY);
-
+function createPlayer($game ) {
+    const $player = document.createElement('img');
+    $player.src = 'img/player-blue-1.png';
+    $player.className = 'player';
+    $game.appendChild($player);
+    setPosition($player, GAME_STATE.playerX, GAME_STATE.playerY);
 }
-
-
-    
 
 function init() {
     const $game = document.querySelector('.game');
     createPlayer($game);
+
+    const enemySpacing = (GAME_WIDTH - ENEMY_HORIZONTAL_PADDING * 2) / (ENEMIES_PER_ROW - 1);
+    for (let j = 0; j < 3; j++) {
+        const y = ENEMY_VERTICAL_PADDING + j * ENEMY_VERTICAL_SPACING;
+        for (let i = 0; i < ENEMIES_PER_ROW; i++) {
+            const x = i * enemySpacing + ENEMY_HORIZONTAL_PADDING;
+            createEnemy($game, x, y);
+        }
+    }
 } 
 
 function updatePlayer(Dt , $game) {
-
     if (GAME_STATE.leftPressed) {
         GAME_STATE.playerX -= Dt * PLAYER_MAX_SPEED;
     }
@@ -60,43 +78,74 @@ function updatePlayer(Dt , $game) {
         GAME_STATE.playerX += Dt * PLAYER_MAX_SPEED;
     }
 
-
     GAME_STATE.playerX = clamp(
         GAME_STATE.playerX, 
         PLAYER_WIDTH, 
         GAME_WIDTH - PLAYER_WIDTH
     );
 
-    if (GAME_STATE.spacePrerssed && GAME_STATE.PlayerCooldown <= 0) {
+    if (GAME_STATE.spacePressed && GAME_STATE.playerCooldown <= 0) {
         createLaser($game, GAME_STATE.playerX, GAME_STATE.playerY);
-        GAME_STATE.PlayerCooldown = LASER_COOLDOWN;
+        GAME_STATE.playerCooldown = LASER_COOLDOWN;
     }
-    if (GAME_STATE.PlayerCooldown > 0) {
-        GAME_STATE.PlayerCooldown -= Dt;
+    if (GAME_STATE.playerCooldown > 0) {
+        GAME_STATE.playerCooldown -= Dt;
     }
     const $player = document.querySelector('.player');
     setPosition($player, GAME_STATE.playerX, GAME_STATE.playerY);
 
     
 }
+function destroyEnemy($game, enemy) {
+    $game.removeChild(enemy.$element);
+    enemy.isDead = true;    
+   
+}
+
+function destroyLaser($game, laser) {
+    laser.isDead = true;
+    if (laser.$element.parentNode === $game) {
+        $game.removeChild(laser.$element);
+    }
+}
 
 function updateLasers(Dt , $game) {
-
    const lasers = GAME_STATE.lasers;
    for (let i = 0; i < lasers.length; i++) {
        const laser = lasers[i];
        laser.y -= Dt * LASER_MAX_SPEED;
-       if (laser.y < 0) {
-           laser.$element.remove();
-           lasers.splice(i, 1);
-           i--;
+       if (laser.y < -laser.$element.height) {
+        destroyLaser($game, laser);
        } else {
            setPosition(laser.$element, laser.x, laser.y);
+           const r1 = laser.$element.getBoundingClientRect();
+           const enemies = GAME_STATE.enemies;
+           for (let j = 0; j < enemies.length; j++) {
+               const enemy = enemies[j];
+               if (enemy.isDead) continue;
+               const r2 = enemy.$element.getBoundingClientRect();
+               if (rectIntersect(r1, r2)) {
+                   destroyEnemy($game, enemy);
+                   destroyLaser($game, laser);
+                   break;
+               }
+           }
        }
-       GAME_STATE.lasers = GAME_STATE.lasers.filter(laser => laser.y > 0);
    }
+   GAME_STATE.lasers = GAME_STATE.lasers.filter(laser => laser.y > -laser.$element.height);
+}
 
-    
+function updateEnemies(Dt , $game) {
+    const dx = Math.sin(GAME_STATE.lastTime / 1000.0) * 50;
+    const dy = Math.cos(GAME_STATE.lastTime / 1000.0) * 10;
+
+    const enemies = GAME_STATE.enemies;
+    for (let i = 0; i < enemies.length; i++) {
+        const enemy = enemies[i];
+        const x = enemy.x + dx;
+        const y = enemy.y + dy;
+        setPosition(enemy.$element, x, y);
+    }
 }
 function createLaser($game , x ,y) {
     
@@ -111,6 +160,16 @@ function createLaser($game , x ,y) {
     audio.play();
     }
 
+
+    function createEnemy($game, x, y) {
+        const $element = document.createElement('img');
+        $element.src = 'img/enemy-blue-1.png';
+        $element.className = 'enemy';
+        $game.appendChild($element);
+        const enemy = {x, y, $element};
+        GAME_STATE.enemies.push(enemy);
+        setPosition($element, x, y);
+    }
     
 function update() {
     const currentTime = Date.now();
@@ -119,6 +178,7 @@ function update() {
     const $game = document.querySelector('.game');
     updatePlayer(Dt , $game);
     updateLasers(Dt, $game);
+    updateEnemies(Dt, $game);
 
     GAME_STATE.lastTime = currentTime;
     window.requestAnimationFrame(update);
@@ -131,7 +191,7 @@ if (event.keyCode === key_CODE_LEFT) {
         GAME_STATE.rightPressed = true;
     
     } else if (event.keyCode === key_CODE_SPACE) {
-        GAME_STATE.spacePrerssed = true;
+        GAME_STATE.spacePressed = true;
     }
 
 }
@@ -143,7 +203,7 @@ function onkeyUp(event) {
      } else if (event.keyCode === key_CODE_RIGHT) {
             GAME_STATE.rightPressed = false;
         } else if (event.keyCode === key_CODE_SPACE) {
-            GAME_STATE.spacePrerssed = false;
+            GAME_STATE.spacePressed = false;
         }
     
     }
