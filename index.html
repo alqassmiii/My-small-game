@@ -10,10 +10,19 @@
   <div class="wrap">
     <header>Space Game</header>
     <div class="hud">
-      <div class="hud-item">Time: <span id="time">0</span>s</div>
+      <div class="hud-item">Time: <span id="time">00:00</span></div>
       <div class="hud-item">Score: <span id="score">0</span></div>
+      <div class="hud-item">Lives: <span id="lives">3</span></div>
     </div>
+
+
     <div class="game-wrapper">
+      <div class="controls">
+        
+        
+          <button id="start-btn" class="btn" onclick="startGame()">Start</button>
+      
+      </div>
       <div class="game"></div>
       <div class="congratulations">
         <h1>Congratulations!</h1>
@@ -25,8 +34,9 @@
         <h2>You lost the game</h2>
         <button class="btn" onclick="resetGame()">Restart</button>
       </div>
-      
+      <button id="pause-btn" class="btn" onclick="pauseGame()">Pause</button>
     </div>
+    
     <footer>Left/right keys to move, Space to shoot</footer>
   </div>
   <script src="js/game.js"></script>
